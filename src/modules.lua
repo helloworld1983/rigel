@@ -3603,23 +3603,23 @@ end
 -- this is a Handshake triggered counter.
 -- it accepts an input value V of type TY.
 -- Then produces N tokens (from V to V+N-1)
-modules.triggeredCounter = memoize(function(TY, N)
-  err( types.isType(TY),"triggeredCounter: TY must be type")
-  err( rigel.expectBasic(TY), "triggeredCounter: TY should be basic")
-  err( TY:isNumber(), "triggeredCounter: type must be numeric rigel type, but is "..tostring(TY))
+modules.rangeCounter = memoize(function(TY, N)
+  err( types.isType(TY),"rangeCounter: TY must be type")
+  err( rigel.expectBasic(TY), "rangeCounter: TY should be basic")
+  err( TY:isNumber(), "rangeCounter: type must be numeric rigel type, but is "..tostring(TY))
   
-  err(type(N)=="number", "triggeredCounter: N must be number")
+  err(type(N)=="number", "rangeCounter: N must be number")
 
-  local res = {kind="triggeredCounter"}
+  local res = {kind="rangeCounter"}
   res.inputType = TY
   res.outputType = rigel.RV(TY)
   res.sdfInput = {{1,N}}
   res.sdfOutput = {{1,1}}
   res.stateful=true
   res.delay=0
-  res.name = "TriggeredCounter_"..verilogSanitize(tostring(TY)).."_"..tostring(N)
+  res.name = "RangeCounter_"..verilogSanitize(tostring(TY)).."_"..tostring(N)
 
-  if terralib~=nil then res.terraModule = MT.triggeredCounter(res,TY,N) end
+  if terralib~=nil then res.terraModule = MT.rangeCounter(res,TY,N) end
 
   function res.makeSystolic()
     local systolicModule = Ssugar.moduleConstructor(res.name)
@@ -3642,6 +3642,34 @@ modules.triggeredCounter = memoize(function(TY, N)
     systolicModule:addFunction( S.lambda("reset", S.parameter("r",types.null()), nil, "ro", {sPhase:reset()},S.parameter("reset",types.bool()) ) )
 
     return systolicModule
+  end
+
+  return modules.liftHandshake(modules.waitOnInput( rigel.newFunction(res) ))
+  
+end)
+
+
+-- triggered by a valid bit, then counts up to N
+modules.counter = memoize(function(TY, N)
+  err( types.isType(TY),"counter: TY must be type")
+  err( rigel.expectBasic(TY), "counter: TY should be basic")
+  err( TY:isNumber(), "counter: type must be numeric rigel type, but is "..tostring(TY))
+  
+  err(type(N)=="number", "counter: N must be number")
+
+  local res = {kind="counter"}
+  res.inputType = types.null()
+  res.outputType = rigel.RV(TY)
+  res.sdfInput = {{1,N}}
+  res.sdfOutput = {{1,1}}
+  res.stateful=true
+  res.delay=0
+  res.name = "Counter_"..verilogSanitize(tostring(TY)).."_"..tostring(N)
+
+  if terralib~=nil then res.terraModule = MT.counter(res,TY,N) end
+
+  function res.makeSystolic()
+    assert(false)
   end
 
   return modules.liftHandshake(modules.waitOnInput( rigel.newFunction(res) ))

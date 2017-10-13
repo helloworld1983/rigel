@@ -356,13 +356,13 @@ function MT.upsampleXSeq(res,A, T, scale, ITYPE )
   return UpsampleXSeq
 end
 
-function MT.triggeredCounter(res,TY,N)
-  local struct TriggeredCounter { buffer : TY:toTerraType(), phase:int, ready:bool }
-  terra TriggeredCounter:reset() self.phase=0; end
-  terra TriggeredCounter:stats(name:&int8)  end
-  terra TriggeredCounter:init() end
-  terra TriggeredCounter:free() end
-  terra TriggeredCounter:process( inp : &rigel.lower(res.inputType):toTerraType(), out : &rigel.lower(res.outputType):toTerraType() )
+function MT.rangeCounter(res,TY,N)
+  local struct RangeCounter { buffer : TY:toTerraType(), phase:int, ready:bool }
+  terra RangeCounter:reset() self.phase=0; end
+  terra RangeCounter:stats(name:&int8)  end
+  terra RangeCounter:init() end
+  terra RangeCounter:free() end
+  terra RangeCounter:process( inp : &rigel.lower(res.inputType):toTerraType(), out : &rigel.lower(res.outputType):toTerraType() )
     valid(out) = true
     if self.phase==0 then
       self.buffer = @(inp)
@@ -374,9 +374,9 @@ function MT.triggeredCounter(res,TY,N)
     self.phase = self.phase + 1
     if self.phase==N then self.phase=0 end
   end
-  terra TriggeredCounter:calculateReady()  self.ready = (self.phase==0) end
+  terra RangeCounter:calculateReady()  self.ready = (self.phase==0) end
 
-  return TriggeredCounter
+  return RangeCounter
 end
 
 function MT.downsampleYSeqFn(innerInputType,outputType,scale)

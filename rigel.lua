@@ -182,6 +182,21 @@ function darkroom.isStreaming(A)
   return false
 end
 
+rigelGlobalFunctions = {}
+rigelGlobalMT = {__index=rigelGlobalFunctions}
+
+function darkroom.newGlobal( name, direction, typeof, initValue )
+  err( type(name)=="string", "newGlobal: name must be string" )
+  err( direction=="input" or direction=="output","newGlobal: direction must be 'input' or 'output'" )
+  err( types.isType(typeof), "newGlobal: type must be rigel type" )
+  err( direction=="input" or typeof:checkLuaValue(initValue), "newGlobal: init value must be valid value of type" )
+
+  local t = {name=name,direction=direction,type=typeof,initValue=initValue}
+  return setmetatable(t,rigelGlobalMT)
+end
+
+darkroom.isGlobal(g) return getmetatable(g)==rigelGlobalMT end
+
 darkroomFunctionFunctions = {}
 darkroomFunctionMT={__index=function(tab,key)
   local v = rawget(tab, key)
@@ -648,6 +663,17 @@ function callOnEntries( T, fnname )
   T.methods[fnname] = terra([TS]) [ssStats] end
 end
 ]=]
+
+function darkroom.readGlobal(g)
+  err( darkroom.isGlobal(g),"readGlobal: input must be rigel global" )
+  return darkroom.newIR{kind="readGlobal",global=g,loc=getloc()}
+end
+
+function darkroom.writeGlobal(g,input)
+  err( darkroom.isGlobal(g),"writeGlobal: input must be rigel global" )
+  err( darkroom.isIR(input),"writeGlobal: input must be rigel value" )
+  return darkroom.newIR{kind="writeGlobal",global=g,loc=getloc(),inputs={input}}
+end
 
 function darkroom.instantiateRegistered( name, fn )
   err( type(name)=="string", "name must be string")
