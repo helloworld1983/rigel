@@ -3,8 +3,9 @@ local RM = require "modules"
 local ffi = require("ffi")
 local types = require("types")
 local S = require("systolic")
-local harness = require "harness"
+local harness = require "harness_new"
 local C = require "examplescommon"
+require "soc".export()
 require "common".export()
 
 W = 128
@@ -34,4 +35,5 @@ fn = RM.lambda( "pointwise_wide", inp, out )
 ------------
 hsfn = RM.makeHandshake(fn)
 
-harness{ outFile="pointwise_wide_handshake"..sel(f1080p~=nil,"_1080p",""), fn=hsfn, inFile=sel(f1080p~=nil,"1080p.raw","frame_128.raw"), inSize={W,H}, outSize={W,H} }
+--harness{ outFile="pointwise_wide_handshake"..sel(f1080p~=nil,"_1080p",""), fn=hsfn, inFile=sel(f1080p~=nil,"1080p.raw","frame_128.raw"), inSize={W,H}, outSize={W,H} }
+harness{ readScanline(sel(f1080p~=nil,"1080p.raw","frame_128.raw"),W,H,ITYPE), hsfn, writeScanline("pointwise_wide_handshake"..sel(f1080p~=nil,"_1080p",""),W,H,ITYPE) }

@@ -11,10 +11,10 @@ local err = J.err
 -- If STREAMING==false, we artificially cap the output once the expected number of pixels is reached. This is needed for some test harnesses
 STREAMING = false
 
-darkroom = {}
+local darkroom = {}
 
 -- enable SDF checking? (true:enable, false:disable)
-darkroom.SDF = true
+darkroom.SDF = false
 
 DEFAULT_FIFO_SIZE = 2048*16*16
 
@@ -195,7 +195,7 @@ function darkroom.newGlobal( name, direction, typeof, initValue )
   return setmetatable(t,rigelGlobalMT)
 end
 
-darkroom.isGlobal(g) return getmetatable(g)==rigelGlobalMT end
+function darkroom.isGlobal(g) return getmetatable(g)==rigelGlobalMT end
 
 darkroomFunctionFunctions = {}
 darkroomFunctionMT={__index=function(tab,key)
@@ -285,6 +285,9 @@ function darkroom.newFunction(tab)
   err( darkroom.SDF==false or (tab.sdfInput[1]=='x' or #tab.sdfInput==0 or tab.sdfInput[1][1]/tab.sdfInput[1][2]<=1), "rigel.newFunction: sdf input rate is not <=1" )
   err( darkroom.SDF==false or (tab.sdfOutput[1]=='x' or #tab.sdfOutput==0 or tab.sdfOutput[1][1]/tab.sdfOutput[1][2]<=1), "rigel.newFunction: sdf output rate is not <=1" )
 
+  err( types.isType(tab.inputType), "rigel.newFunction: input type must be type" )
+  err( types.isType(tab.outputType), "rigel.newFunction: output type must be type ("..tab.kind..")" )
+  
   return setmetatable( tab, darkroomFunctionMT )
 end
 
@@ -556,8 +559,10 @@ function darkroomIRFunctions:typecheck()
         else
           err(false, "selectStream input must be array or tuple of handshakes, but is "..tostring(n.inputs[1].type) )
         end
-        
-        --return darkroom.newIR(n)
+
+      elseif n.kind=="readGlobal" then
+      elseif n.kind=="writeGlobal" then
+        err( n.inputs[1].type==n.global.type, "Error, input to writeGlobal is incorrect type. is "..tostring(n.inputs[1].type).." but should be "..tostring(n.global.type)..", "..n.loc )
       else
         print("Rigel Typecheck NYI ",n.kind)
         assert(false)
@@ -664,15 +669,17 @@ function callOnEntries( T, fnname )
 end
 ]=]
 
-function darkroom.readGlobal(g)
+function darkroom.readGlobal(g,X)
   err( darkroom.isGlobal(g),"readGlobal: input must be rigel global" )
-  return darkroom.newIR{kind="readGlobal",global=g,loc=getloc()}
+  err(X==nil,"readGlobal: too many arguments")
+  return darkroom.newIR{kind="readGlobal",global=g,type=g.type,loc=getloc(),inputs={}}
 end
 
-function darkroom.writeGlobal(g,input)
-  err( darkroom.isGlobal(g),"writeGlobal: input must be rigel global" )
-  err( darkroom.isIR(input),"writeGlobal: input must be rigel value" )
-  return darkroom.newIR{kind="writeGlobal",global=g,loc=getloc(),inputs={input}}
+function darkroom.writeGlobal( g, input, X )
+  err( darkroom.isGlobal(g),"writeGlobal: first argument must be rigel global" )
+  err( darkroom.isIR(input),"writeGlobal: second argument must be rigel value" )
+  err(X==nil,"writeGlobal: too many arguments")
+  return darkroom.newIR{kind="writeGlobal",global=g,loc=getloc(),inputs={input},type=types.null()}
 end
 
 function darkroom.instantiateRegistered( name, fn )

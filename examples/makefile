@@ -208,8 +208,8 @@ asic: $(ASIC)
 clean:
 	rm -Rf out/*
 
-out/%.v out/%.verilator.metadata.lua: %.lua
-	$(LUA) $< verilator
+out/%.v out/%.verilog.metadata.lua: %.lua
+	$(LUA) $< verilog
 	# keep copy for future reference
 	mkdir -p out/build_$*
 	- cp out/$*.v out/build_$*
