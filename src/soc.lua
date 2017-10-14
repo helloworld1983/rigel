@@ -1,60 +1,90 @@
 local R = require "rigel"
 local RM = require "modules"
+local S = require "systolic"
+local types = require "types"
 local J = require "common"
 local SOC = {}
 
 local PORTS = 4
 
-SOC.frameStart = R.newGlobal("frameStart","input",rigel.Handshake(types.null()),{nil,false})
+SOC.frameStart = R.newGlobal("frameStart","input", R.Handshake(types.null()),{nil,false})
 
-SOC.readAddrs = J.map(J.range(0,PORTS-1),function(i) return R.newGlobal("readAddr"..tostring(i),"output",R.Handshake(types.uint(32)),{0,false}) end)
-SOC.readData = J.map(J.range(0,PORTS-1),function(i) return R.newGlobal("readData"..tostring(i),"input",R.Handshake(types.bits(64))) end)
+SOC.readAddrs = J.map(J.range(PORTS),function(i) return R.newGlobal("readAddr"..tostring(i),"output",R.Handshake(types.uint(32)),{0,false}) end)
 
-SOC.writeAddrs = J.map(J.range(0,PORTS-1),function(i) return R.newGlobal("writeAddr"..tostring(i),"output",R.Handshake(types.uint(32)),{0,false}) end)
-SOC.writeData = J.map(J.range(0,PORTS-1),function(i) return R.newGlobal("writeData"..tostring(i),"output",R.Handshake(types.bits(64)),{0,false}) end)
+SOC.readData = J.map(J.range(PORTS),function(i) return R.newGlobal("readData"..tostring(i),"input",R.Handshake(types.bits(64))) end)
+
+SOC.writeAddrs = J.map(J.range(PORTS),function(i) return R.newGlobal("writeAddr"..tostring(i),"output",R.Handshake(types.uint(32)),{0,false}) end)
+SOC.writeData = J.map(J.range(PORTS),function(i) return R.newGlobal("writeData"..tostring(i),"output",R.Handshake(types.bits(64)),{0,false}) end)
   
 -- does a 128 byte burst
 -- uint25 addr -> bits(64)
-SOC.bulkRamRead = memoize(function(port)
-  if port==nil then return SOC.bulkRamRead(0) end
+SOC.bulkRamRead = J.memoize(function(port)
   err( type(port)=="number", "bulkRamRead: port must be number" )
-  err( port<PORTS,"bulkRamRead: port out of range" )
+  err( port>0 and port<=PORTS,"bulkRamRead: port out of range" )
       
   local H = require "rigelhll"
-  local brri = rigel.input(types.uint(25))
-  brri = H.cast(H.u32)(brri)
-  brri = H.lshift(brri,H.c(u8,7))
-  local pipelines = {R.writeGlobal( SOC.readAddrs[port], brri )}
+  local brri = R.input(R.Handshake(types.uint(25)))
+  local addr = H.liftSystolic(function(i) return S.lshift(S.cast(i,H.u32),S.constant(7,H.u8)) end)(brri)
+  --brri = H.cast(H.u32)(brri)
+  --brri = H.lshift(brri,H.c(H.u8,7))
+  local pipelines = {R.writeGlobal( SOC.readAddrs[port], addr )}
 
   return RM.lambda("bulkRamRead_"..tostring(port),brri,R.readGlobal(SOC.readData[port]),nil,pipelines)
 end)
 
 -- {Handshake(uint25),Handshake(bits(64))}
 -- you need to write 16 data chunks per address!!
-SOC.bulkRamWrite = RM.lambda()
+SOC.bulkRamWrite = J.memoize(function(port)
+  err( type(port)=="number", "bulkRamWrite: port must be number" )
+  err( port>0 and port<=PORTS,"bulkRamWrite: port out of range" )
 
-SOC.readScanline = memoize(function(filename,W,H,ty)
+  local H = require "rigelhll"
+  local brri = R.input(types.tuple{ R.Handshake(types.uint(25)), R.Handshake(types.bits(64)) } )
+  local addr = brri:selectStream(0)
+  local addr = H.liftSystolic(function(i) return S.lshift(S.cast(i,H.u32),S.constant(7,H.u8)) end)(addr)
+  local datai = brri:selectStream(1)
+
+  local pipelines = { R.writeGlobal(SOC.writeAddrs[port],addr)  }
+
+  local BRR =  RM.lambda( "bulkRamWrite_"..tostring(port), brri, R.writeGlobal(SOC.writeData[port],datai),nil,pipelines )
+
+  return BRR
+end)
+
+SOC.readScanline = J.memoize(function(filename,W,H,ty)
   local fs = R.readGlobal(SOC.frameStart)
 
   local totalBytes = W*H*ty:verilogBits()/8
   err( totalBytes % 128 == 0,"NYI - non burst aligned reads")
 
   local addr = R.apply("addr",RM.counter(types.uint(25),totalBytes/128),fs)
-  local out = R.apply("ramRead",SOC.bulkRamRead,addr)
+  local out = R.apply("ramRead", SOC.bulkRamRead(1), addr )
 
-  out = R.apply("underflow_US", RM.underflow( R.extractData(inputType), inputBytes/8, EC, true ), out)
+  local EC = 1024*16
+  out = R.apply("underflow_US", RM.underflow( types.bits(64), totalBytes/8, EC, true ), out)
+
+  local HLL = require "rigelhll"
+  out = HLL.cast(ty)(out)
   
   return RM.lambda("readScanline",nil,out)
 end)
 
-SOC.writeScanline = memoize(function(filename,W,H,ty)
-  local I = R.input(ty)
+SOC.writeScanline = J.memoize(function(filename,W,H,ty)
+  local I = R.input(R.Handshake(ty))
 
+  local totalBytes = W*H*ty:verilogBits()/8
+  err( totalBytes % 128 == 0,"NYI - non burst aligned reads")
+  local outputCount = totalBytes/8
+
+  local EC = 1024*16
   ----------------
   local out = R.apply("overflow", RM.liftHandshake(RM.liftDecimate(RM.overflow(R.extractData(hsfn.outputType), outputCount))), I)
-  out = R.apply("underflow", RM.underflow(R.extractData(hsfn.outputType), outputBytes/8, EC, false ), out)
-  out = R.apply("cycleCounter", RM.cycleCounter(R.extractData(hsfn.outputType), outputBytes/8 ), out)
+  out = R.apply("underflow", RM.underflow(R.extractData(hsfn.outputType), totalBytes/8, EC, false ), out)
+  out = R.apply("cycleCounter", RM.cycleCounter(R.extractData(hsfn.outputType), totalBytes/8 ), out)
 
+  local HLL = require "rigelhll"
+  out = HLL.cast(types.bits(64))(out)
+  
   ---------------
   local fs = R.readGlobal(SOC.frameStart)
 
@@ -63,8 +93,16 @@ SOC.writeScanline = memoize(function(filename,W,H,ty)
 
   local addr = R.apply("addr",RM.counter(types.uint(25),totalBytes/128),fs)
   ---------------
-
-  out = R.apply("write",SOC.bulkRamWrite, R.concat("w",{addr,out}) )
+  
+  out = R.apply("write", SOC.bulkRamWrite(1), R.concat("w",{addr,out}) )
   
   return RM.lambda("writeScanline",I,out)
 end)
+
+function SOC.export(t)
+  if t==nil then t=_G end
+  for k,v in pairs(SOC) do rawset(t,k,v) end
+end
+
+
+return SOC

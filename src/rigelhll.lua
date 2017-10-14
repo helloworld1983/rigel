@@ -347,8 +347,10 @@ function RHLL.lambda(fn,settings)
 end
 
 local function HLLLift(fn)
-  return setmetatable({fn=RS.modules.lift, settings={fn=fn}}, SimpleModuleWrapperMT )
+  return setmetatable({fn=RS.modules.lift, settings={fn=fn}, wireFn=stripHS}, SimpleModuleWrapperMT )
 end
+
+RHLL.liftSystolic = HLLLift
 
 RHLL.sel = HLLLift(function(x) return S.select(S.index(x,0),S.index(x,1),S.index(x,2)) end )
 RHLL.lt = HLLLift(function(x) return S.lt(S.index(x,0),S.index(x,1)) end )

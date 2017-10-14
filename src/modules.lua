@@ -2629,7 +2629,7 @@ modules.reduceSeq = memoize(function( f, T, X )
 modules.overflow = memoize(function( A, count )
   rigel.expectBasic(A)
 
-  assert(count<2^32-1)
+  err( count<2^32-1, "overflow: outputCount must not overflow")
 
   -- SDF rates are not actually correct, b/c this module doesn't fit into the SDF model.
   -- But in theory you should only put this at the very end of your pipe, so whatever...
@@ -2658,10 +2658,10 @@ end)
 -- if thing thing is done before tooSoonCycles, throw an assert
 modules.underflow = memoize(function( A, count, cycles, upstream, tooSoonCycles )
   rigel.expectBasic(A)
-  assert(type(count)=="number")
-  assert(type(cycles)=="number")
+  err( type(count)=="number", "underflow: count must be number" )
+  err( type(cycles)=="number", "underflow: cycles must be number" )
   err(cycles==math.floor(cycles),"cycles must be an integer")
-  assert(type(upstream)=="boolean")
+  err( type(upstream)=="boolean", "underflow: upstream must be bool" )
   err( tooSoonCycles==nil or type(tooSoonCycles)=="number", "tooSoonCycles must be nil or number" )
 
   assert(count<2^32-1)
@@ -2933,7 +2933,7 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
       end
     end)
 
-  if input~=nil and rigel.isStreaming(input.type)==false then
+  if input~=nil and input.type~=types.null() and rigel.isStreaming(input.type)==false then
     res.delay = output:visitEach(
       function(n, inputs)
         if n.kind=="input" or n.kind=="constant" then
@@ -2941,6 +2941,7 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
         elseif n.kind=="concat" or n.kind=="concatArray2d" then
           return math.max(unpack(inputs))
         elseif n.kind=="apply" then
+          err( type(n.fn.delay)=="number", "delay is not number? module "..name.." "..tostring(input.type).." "..tostring(output.type) )
           if n.fn.inputType==types.null() then return n.fn.delay
           else return inputs[1] + n.fn.delay end
         else
@@ -3265,10 +3266,10 @@ function modules.lift( name, inputType, outputType, delay, makeSystolic, makeTer
     return systolicModule
   end
 
-  local res = rigel.newFunction( res )
-
   if res.outputType==nil then
-    err( S.isModule(res.systolicModule), "modules.lift: outputType is missing, and so is the systolic module?")
+    --err( S.isModule(res.systolicModule), "modules.lift: outputType is missing, and so is the systolic module?")
+    if res.systolicModule==nil then res.systolicModule = res.makeSystolic() end
+    
     res.outputType = res.systolicModule.functions.process.output.type
     err( types.isType(res.outputType), "modules.lift: systolic module did not return a valid type")
   end
@@ -3289,6 +3290,8 @@ function modules.lift( name, inputType, outputType, delay, makeSystolic, makeTer
 
     res.terraModule=MT.lift(inputType,outputType,terraFunction,systolicInput,systolicOutput) 
   end
+
+  local res = rigel.newFunction( res )
 
   return res
 end
