@@ -27,6 +27,7 @@ SOC.bulkRamRead = J.memoize(function(port)
   local addr = H.liftSystolic(function(i) return S.lshift(S.cast(i,H.u32),S.constant(7,H.u8)) end)(brri)
   --brri = H.cast(H.u32)(brri)
   --brri = H.lshift(brri,H.c(H.u8,7))
+
   local pipelines = R.statements{ R.readGlobal( "ramread", SOC.readData[port] ), R.writeGlobal( "addrwrite", SOC.readAddrs[port], addr ) }
 
   return RM.lambda("bulkRamRead_"..tostring(port),brri,pipelines)

@@ -3,7 +3,7 @@ local RM = require "modules"
 local ffi = require("ffi")
 local types = require("types")
 local S = require("systolic")
-local harness = require "harness"
+local harness = require "harness_new"
 local C = require "examplescommon"
 require "soc".export()
 require "common".export()
