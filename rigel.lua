@@ -191,7 +191,16 @@ function darkroom.newGlobal( name, direction, typeof, initValue )
   err( types.isType(typeof), "newGlobal: type must be rigel type" )
   err( direction=="input" or typeof:checkLuaValue(initValue), "newGlobal: init value must be valid value of type" )
 
+  err( darkroom.isBasic(typeof) or darkroom.isHandshake(typeof), "NYI - globals must be basic type or handshake")
+
   local t = {name=name,direction=direction,type=typeof,initValue=initValue}
+
+  t.systolicValue = S.newGlobal( name, direction, darkroom.lower(typeof), initValue )
+
+  if darkroom.isHandshake(typeof) then
+    t.systolicReady = S.newGlobal( name.."_ready", J.sel(direction=="input","output","input"), types.bool(), false)
+  end
+  
   return setmetatable(t,rigelGlobalMT)
 end
 
@@ -635,6 +644,10 @@ function darkroomIRFunctions:codegenSystolic( module )
         return inputs[1]
       elseif n.kind=="selectStream" then
         return {S.index(inputs[1][1],n.i)}
+      elseif n.kind=="readGlobal" then
+        return {S.readGlobal(n.global.systolicValue)}
+      elseif n.kind=="writeGlobal" then
+        return {S.writeGlobal(n.global.systolicValue)}
       else
         print(n.kind)
         assert(false)
