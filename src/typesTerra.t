@@ -62,7 +62,7 @@ end
 
 function TypeFunctions:valueToTerra(value)
   if self:isUint() or self:isFloat() or self:isInt() then
-    assert(type(value)=="number")
+    err(type(value)=="number", "valueToTerra "..tostring(self).." "..tostring(value))
     return `[self:toTerraType()](value)
   elseif self:isBool() then
     assert(type(value)=="boolean")

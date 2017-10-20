@@ -17,13 +17,26 @@ local err = J.err
 --local valid = rigel.valid
 --local ready = rigel.ready
 
-darkroom.data = macro(function(i) return `i._0 end)
-local data = darkroom.data
-darkroom.valid = macro(function(i) return `i._1 end)
-local valid = darkroom.valid
-darkroom.ready = macro(function(i) return `i._2 end)
-local ready = darkroom.ready
+--darkroom.data = macro(function(i) return `i._0 end)
+local data = macro(function(i) return `i._0 end)
+--darkroom.valid = macro(function(i) return `i._1 end)
+local valid = macro(function(i) return `i._1 end)
+--darkroom.ready = macro(function(i) return `i._2 end)
+local ready = macro(function(i) return `i._2 end)
 
+function rigelGlobalFunctions:terraValue()
+  if self.terraValueVar==nil then
+    self.terraValueVar = global( self.type, self.type:valueToTerra(self.initValue), self.name )
+  end
+  return self.terraValueVar
+end
+
+function rigelGlobalFunctions:terraReady()
+  if self.terraReadyVar==nil then
+    self.terraReadyVar = global( bool, false, self.name )
+  end
+  return self.terraReadyVar
+end
 
 local MT = {}
 
@@ -377,6 +390,33 @@ function MT.rangeCounter(res,TY,N)
   terra RangeCounter:calculateReady()  self.ready = (self.phase==0) end
 
   return RangeCounter
+end
+
+function MT.counter(res,TY,N)
+  local struct Counter {buffer:TY:toTerraType(), ready:bool}
+  terra Counter:reset() self.buffer=0; self.ready=true end
+  terra Counter:process( inp : &rigel.lower(res.inputType):toTerraType(), out : &rigel.lower(res.outputType):toTerraType() )
+    if self.ready then
+      -- first cycle
+      valid(out) = true
+      self.ready = false
+      data(out) = self.buffer
+      self.buffer = self.buffer+1
+    else
+      -- N cycles
+      valid(out) = true
+      data(out) = self.buffer
+
+      if self.buffer==N-1 then
+        self.ready = true
+        self.buffer = 0
+      else
+        self.buffer = self.buffer+1
+      end
+    end
+  
+  end
+  return Counter
 end
 
 function MT.downsampleYSeqFn(innerInputType,outputType,scale)
@@ -1526,6 +1566,16 @@ function MT.lambdaCompile(fn)
           res = symbol(bool[n.inputs[1]:outputStreams()])
           table.insert( readyStats, quote var [res]; [res][n.i] = [arg] end )
           res = {res}
+        elseif n.kind=="readGlobal" then
+          err( n.global.direction=="input", "Error, attempted to write a global output ready bit ("..n.global.name..")" )
+          err( rigel.isHandshake(n.global.type), "Error, ready bit wiring, reading a global that is not a handshake ("..n.global.name..")" )
+          --print("TERRAREADY",n.global:terraReady(),terralib.isglobalvar(n.global:terraReady()))
+          table.insert( readyStats, quote [n.global:terraReady()] = [arg] end )
+        elseif n.kind=="writeGlobal" then
+          err( n.global.direction=="output", "Error, ready bit wiring, attempt to write to global input ("..n.global.name..")" )
+          err( rigel.isHandshake(n.global.type), "Error, ready bit wiring, writing a global that is not a handshake ("..n.global.name..")" )
+          --print("TERRAREADY",n.global:terraReady(),terralib.isglobalvar(n.global:terraReady()))
+          res = {n.global:terraReady()}
         else
           print(n.kind)
           assert(false)
@@ -1544,7 +1594,10 @@ function MT.lambdaCompile(fn)
     terra Module.methods.calculateReady( [mself] ) var [readyInput] = true; [readyStats]; mself.ready = readyOutput end
   elseif rigel.isHandshake(fn.outputType) or fn.output:outputStreams()>0 then
     local TMP = quote end
-    if fn.input~=nil then TMP = quote mself.ready = [readyOutput] end end
+    if fn.input~=nil then 
+      err(readyOutput~=nil, "Error? Function has a handshake output, but doesn't drive an input ready bit?")
+      TMP = quote mself.ready = [readyOutput] end
+    end
     terra Module.methods.calculateReady( [mself], [readyInput] ) mself.readyDownstream = readyInput; [readyStats]; TMP; end
   end
 
