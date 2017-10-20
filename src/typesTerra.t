@@ -46,6 +46,8 @@ function TypeFunctions:toTerraType(pointer, vectorN)
     assert(false)
   end
 
+  assert(terralib.types.istype(ttype))
+  
   if vectorN then
     if pointer then return &vector(ttype,vectorN) end
     return vector(ttype,vectorN)

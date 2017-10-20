@@ -308,6 +308,8 @@ darkroomInstanceMT = {}
 function darkroom.isInstance(t) return getmetatable(t)==darkroomInstanceMT end
 function darkroom.newIR(tab)
   assert( type(tab) == "table" )
+  --err( type(tab.name)=="string", "IR node "..tab.kind.." is missing name" )
+  err( type(tab.loc)=="string", "IR node "..tab.kind.." is missing loc" )
   IR.new( tab )
   local r = setmetatable( tab, darkroomIRMT )
   r:typecheck()
@@ -684,17 +686,19 @@ function callOnEntries( T, fnname )
 end
 ]=]
 
-function darkroom.readGlobal(g,X)
+function darkroom.readGlobal( name, g, X )
+  err( type(name)=="string", "rigel.readGlobal: name must be string" )
   err( darkroom.isGlobal(g),"readGlobal: input must be rigel global" )
   err(X==nil,"readGlobal: too many arguments")
-  return darkroom.newIR{kind="readGlobal",global=g,type=g.type,loc=getloc(),inputs={}}
+  return darkroom.newIR{kind="readGlobal",name=name,global=g,type=g.type,loc=getloc(),inputs={}}
 end
 
-function darkroom.writeGlobal( g, input, X )
+function darkroom.writeGlobal( name, g, input, X )
+  err( type(name)=="string", "rigel.writeGlobal: name must be string" )
   err( darkroom.isGlobal(g),"writeGlobal: first argument must be rigel global" )
   err( darkroom.isIR(input),"writeGlobal: second argument must be rigel value" )
   err(X==nil,"writeGlobal: too many arguments")
-  return darkroom.newIR{kind="writeGlobal",global=g,loc=getloc(),inputs={input},type=types.null()}
+  return darkroom.newIR{kind="writeGlobal",name=name,global=g,loc=getloc(),inputs={input},type=types.null()}
 end
 
 function darkroom.instantiateRegistered( name, fn )

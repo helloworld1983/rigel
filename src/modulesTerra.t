@@ -26,7 +26,9 @@ local ready = macro(function(i) return `i._2 end)
 
 function rigelGlobalFunctions:terraValue()
   if self.terraValueVar==nil then
-    self.terraValueVar = global( self.type, self.type:valueToTerra(self.initValue), self.name )
+    local v
+    --if self.direction=="output" then v=self.type:valueToTerra(self.initValue) end
+    self.terraValueVar = global( self.type:toTerraType(), v, self.name )
   end
   return self.terraValueVar
 end
@@ -1520,8 +1522,8 @@ function MT.lambdaCompile(fn)
             assert(false)
           end
           
-          for k,v in pairs(args) do
-            assert(terralib.isquote(v) or terralib.issymbol(v))
+          for parentNode,v in pairs(args) do
+            err( terralib.isquote(v) or terralib.issymbol(v), "consumer of kind "..parentNode.kind.." did not return a valid ready value?")
             arg=v
           end
         end
@@ -1567,15 +1569,12 @@ function MT.lambdaCompile(fn)
           table.insert( readyStats, quote var [res]; [res][n.i] = [arg] end )
           res = {res}
         elseif n.kind=="readGlobal" then
-          err( n.global.direction=="input", "Error, attempted to write a global output ready bit ("..n.global.name..")" )
           err( rigel.isHandshake(n.global.type), "Error, ready bit wiring, reading a global that is not a handshake ("..n.global.name..")" )
-          --print("TERRAREADY",n.global:terraReady(),terralib.isglobalvar(n.global:terraReady()))
           table.insert( readyStats, quote [n.global:terraReady()] = [arg] end )
+          res={arg}
         elseif n.kind=="writeGlobal" then
-          err( n.global.direction=="output", "Error, ready bit wiring, attempt to write to global input ("..n.global.name..")" )
           err( rigel.isHandshake(n.global.type), "Error, ready bit wiring, writing a global that is not a handshake ("..n.global.name..")" )
-          --print("TERRAREADY",n.global:terraReady(),terralib.isglobalvar(n.global:terraReady()))
-          res = {n.global:terraReady()}
+          res = {`[n.global:terraReady()]}
         else
           print(n.kind)
           assert(false)
@@ -1720,8 +1719,14 @@ function MT.lambdaCompile(fn)
           else
             return `&((@[inputs[1]])[n.i])
           end
+        elseif n.kind=="readGlobal" then
+          return `[n.global:terraValue()]
+        elseif n.kind=="writeGlobal" then
+--print("TTYPE",n.global.type:toTerraType(), n.global:terraValue())
+          table.insert(stats, quote [n.global:terraValue()] = [inputs[1]] end)
+          return `nil
         else
-          print(n.kind)
+          print("NYI - terra compilation of ",n.kind)
           assert(false)
         end
     end)

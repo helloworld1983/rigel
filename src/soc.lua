@@ -27,9 +27,9 @@ SOC.bulkRamRead = J.memoize(function(port)
   local addr = H.liftSystolic(function(i) return S.lshift(S.cast(i,H.u32),S.constant(7,H.u8)) end)(brri)
   --brri = H.cast(H.u32)(brri)
   --brri = H.lshift(brri,H.c(H.u8,7))
-  local pipelines = {R.writeGlobal( SOC.readAddrs[port], addr )}
+  local pipelines = R.statements{ R.readGlobal( "ramread", SOC.readData[port] ), R.writeGlobal( "addrwrite", SOC.readAddrs[port], addr ) }
 
-  return RM.lambda("bulkRamRead_"..tostring(port),brri,R.readGlobal(SOC.readData[port]),nil,pipelines)
+  return RM.lambda("bulkRamRead_"..tostring(port),brri,pipelines)
 end)
 
 -- {Handshake(uint25),Handshake(bits(64))}
@@ -44,15 +44,15 @@ SOC.bulkRamWrite = J.memoize(function(port)
   local addr = H.liftSystolic(function(i) return S.lshift(S.cast(i,H.u32),S.constant(7,H.u8)) end)(addr)
   local datai = brri:selectStream(1)
 
-  local pipelines = { R.writeGlobal(SOC.writeAddrs[port],addr)  }
+  local pipelines = R.statements{ R.writeGlobal( "datawrite", SOC.writeData[port], datai ), R.writeGlobal( "addrwrite", SOC.writeAddrs[port], addr )  }
 
-  local BRR =  RM.lambda( "bulkRamWrite_"..tostring(port), brri, R.writeGlobal(SOC.writeData[port],datai),nil,pipelines )
+  local BRR =  RM.lambda( "bulkRamWrite_"..tostring(port), brri, pipelines )
 
   return BRR
 end)
 
 SOC.readScanline = J.memoize(function(filename,W,H,ty)
-  local fs = R.readGlobal(SOC.frameStart)
+  local fs = R.readGlobal("framestartread",SOC.frameStart)
 
   local totalBytes = W*H*ty:verilogBits()/8
   err( totalBytes % 128 == 0,"NYI - non burst aligned reads")
@@ -86,7 +86,7 @@ SOC.writeScanline = J.memoize(function(filename,W,H,ty)
   out = HLL.cast(types.bits(64))(out)
   
   ---------------
-  local fs = R.readGlobal(SOC.frameStart)
+  local fs = R.readGlobal("framestartread",SOC.frameStart)
 
   local totalBytes = W*H*ty:verilogBits()/8
   err( totalBytes % 128 == 0,"NYI - non burst aligned write")
