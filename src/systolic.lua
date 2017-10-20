@@ -216,6 +216,23 @@ function systolicModuleFunctions:lookupFunction( fnname )
   err(false, "Function "..fnname.." not found!")
 end
 
+
+systolicGlobalMT = {}
+function systolic.isGlobal(t) return getmetatable(t)==systolicGlobalMT end
+function systolic.newGlobal( name, direction, typeof, initValue)
+  err( type(name)=="string", "newGlobal: name must be string" )
+  err( direction=="input" or direction=="output","newGlobal: direction must be 'input' or 'output'" )
+  err( types.isType(typeof), "newGlobal: type must be rigel type" )
+  err( direction=="input" or typeof:checkLuaValue(initValue), "newGlobal: init value must be valid value of type" )
+
+  local t = {name=name,direction=direction,type=typeof,initValue=initValue}
+
+  return setmetatable(t,systolicGlobalMT)
+end
+
+function systolic.readGlobal(g) return typecheck({kind="readGlobal",global=g,type=g.type,inputs={},loc=getloc()}) end
+function systolic.writeGlobal(g,inp) return typecheck({kind="readGlobal",global=g,type=g.type,inputs={inp},loc=getloc()}) end
+
 systolicFunctionFunctions = {}
 systolicFunctionMT={__index=systolicFunctionFunctions}
 
@@ -437,8 +454,9 @@ function systolic.bitSlice( expr, low, high )
   return typecheck({kind="bitSlice",inputs={expr},low=low,high=high,loc=getloc()})
 end
 
-function systolic.constant( v, ty )
+function systolic.constant( v, ty, X )
   err( types.isType(ty), "constant type must be a type")
+  err( X==nil, "systolic.constant: too many arguments" )
   ty = ty:makeConst()
   ty:checkLuaValue(v)
   return typecheck({ kind="constant", value=J.deepcopy(v), type = ty, loc=getloc(), inputs={} })

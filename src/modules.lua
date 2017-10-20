@@ -3656,7 +3656,7 @@ modules.rangeCounter = memoize(function(TY, N)
 end)
 
 
--- triggered by a valid bit, then counts up to N
+-- triggered by a valid bit, then counts from 0-(N-1)
 modules.counter = memoize(function(TY, N)
   err( types.isType(TY),"counter: TY must be type")
   err( rigel.expectBasic(TY), "counter: TY should be basic")

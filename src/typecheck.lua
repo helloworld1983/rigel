@@ -228,6 +228,8 @@ local function typecheck_inner( ast, newNodeFn )
     if types.checkExplicitCast( ast.inputs[1].type, ast.type, ast)==false then
       error("Casting from "..tostring(ast.inputs[1].type).." to "..tostring(ast.type).." isn't allowed! "..ast.loc)
     end
+  elseif ast.kind=="readGlobal" then
+    err( ast.global.direction=="input", "read global must be an input")
   else
     error("Internal error, typechecking for "..ast.kind.." isn't implemented! "..ast.loc)
     return nil
@@ -242,26 +244,5 @@ end
 
 return function( ast, newNodeFn )
   local out = typecheck_inner( ast, newNodeFn )
-
-  local allConstInput = true
-
-  for k,v in pairs(ast.inputs) do if v.type:const()==false then allConstInput=false end end
-
-  -- sanity check: out is const <=> inputs are all const
-  if (ast.type:const() and allConstInput==false) then
-    if ast.kind~="slice" and ast.kind~="select" then
-      -- select: cond can be non-const, but values are const
-      print("Inputs aren't const, but output is!",ast.kind)
-      assert(false)
-    end
-  end
-
-  if (ast.type:const()==false and allConstInput) then
-    if ast.kind~="cast" then
-      print("Lost constness?",ast.kind)
-      assert(false)
-    end
-  end
-
   return out
 end

@@ -570,7 +570,9 @@ function darkroomIRFunctions:typecheck()
         end
 
       elseif n.kind=="readGlobal" then
+        err( n.global.direction=="input", "Error, attempted to read a global output ("..n.global.name..")" )
       elseif n.kind=="writeGlobal" then
+        err( n.global.direction=="output", "Error, attempted to write a global input ("..n.global.name..")" )
         err( n.inputs[1].type==n.global.type, "Error, input to writeGlobal is incorrect type. is "..tostring(n.inputs[1].type).." but should be "..tostring(n.global.type)..", "..n.loc )
       else
         print("Rigel Typecheck NYI ",n.kind)
