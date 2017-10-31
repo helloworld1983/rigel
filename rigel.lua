@@ -1,13 +1,12 @@
 local IR = require("ir")
 local types = require("types")
-local ffi = require("ffi")
 local S = require("systolic")
 local Ssugar = require("systolicsugar")
 local SDFRate = require "sdfrate"
 local J = require "common"
 local err = J.err
 
--- We can operate in 2 different modes: either we stream frames continuously (STREAMING==true), or we only do one frame (STREAMING==false). 
+-- We can operate in 2 different modes: either we stream frames continuously (STREAMING==true), or we only do one frame (STREAMING==false).
 -- If STREAMING==false, we artificially cap the output once the expected number of pixels is reached. This is needed for some test harnesses
 STREAMING = false
 
@@ -29,16 +28,16 @@ local function getloc()
 end
 
 
-function darkroom.V(A) 
-  err(types.isType(A),"V: argument should be type"); 
-  err(darkroom.isBasic(A), "V: argument should be basic type"); 
-  return types.named("V("..tostring(A)..")", types.tuple{A,types.bool()}, "V", {A=A}) 
+function darkroom.V(A)
+  err(types.isType(A),"V: argument should be type");
+  err(darkroom.isBasic(A), "V: argument should be basic type");
+  return types.named("V("..tostring(A)..")", types.tuple{A,types.bool()}, "V", {A=A})
 end
 
-function darkroom.RV(A) 
-  err(types.isType(A), "RV: argument should be type"); 
-  err(darkroom.isBasic(A), "RV: argument should be basic type"); 
-  return types.named("RV("..tostring(A)..")",types.tuple{A,types.bool()}, "RV", {A=A})  
+function darkroom.RV(A)
+  err(types.isType(A), "RV: argument should be type");
+  err(darkroom.isBasic(A), "RV: argument should be basic type");
+  return types.named("RV("..tostring(A)..")",types.tuple{A,types.bool()}, "RV", {A=A})
 end
 
 function darkroom.Handshake(A)
@@ -119,8 +118,8 @@ function darkroom.lower( a, loc )
   assert(types.isType(a))
   if darkroom.isHandshake(a) or darkroom.isRV(a) or darkroom.isV(a) or darkroom.isHandshakeArray(a) or darkroom.isHandshakeArrayOneHot(a) or darkroom.isHandshakeTmuxed(a) or darkroom.isHandshakeTuple(a) then
     return a.structure
-  elseif darkroom.isBasic(a) then 
-    return a 
+  elseif darkroom.isBasic(a) then
+    return a
   end
   assert(false)
 end
@@ -154,9 +153,9 @@ function darkroom.extractReady(a)
     return types.array2d(types.bool(),#a.params.list) -- we always use arrays for ready bits. no reason not to.
   elseif darkroom.isHandshakeArrayOneHot(a) then
     return types.uint(8)
-  else 
+  else
     print("COULD NOT EXTRACT READY",a)
-    assert(false) 
+    assert(false)
   end
 end
 
@@ -304,17 +303,17 @@ local __sdfTotalCache = {}
 function darkroomIRFunctions:sdfTotalInner( registeredInputRates )
   assert( type(registeredInputRates)=="table" )
 
-  local res = self:visitEach( 
+  local res = self:visitEach(
     function( n, args )
       local res
       if n.kind=="input" or n.kind=="constant" then
         local rate = {{1,1}}
-        if n.kind=="input" and n.sdfRate~=nil then 
+        if n.kind=="input" and n.sdfRate~=nil then
           err( SDFRate.isSDFRate(n.sdfRate),"sdf rate not an sdf rate? "..n.kind..n.loc)
-          rate=n.sdfRate; 
+          rate=n.sdfRate;
         end
         res = {rate,J.broadcast(true,#rate)}
-	if DARKROOM_VERBOSE then print("INPUT",n.name,"converged=",res[2][1],"RATE",res[1][1][1],res[1][1][2]) end
+    if DARKROOM_VERBOSE then print("INPUT",n.name,"converged=",res[2][1],"RATE",res[1][1][1],res[1][1][2]) end
       elseif n.kind=="applyMethod" then
         if n.fnname=="load" then
           if registeredInputRates[n.inst]==nil then
@@ -340,7 +339,7 @@ function darkroomIRFunctions:sdfTotalInner( registeredInputRates )
             assert( SDFRate.isSDFRate(n.sdfRateOverride))
             res[1] = n.sdfRateOverride
           end
-	  
+
           if DARKROOM_VERBOSE then print("NULLARY",n.name,n.fn.kind,"converged=",res[2][1],"RATE",res[1][1][1],res[1][1][2]) end
         elseif #n.inputs==1 then
           res =  n.fn:sdfTransfer(args[1], "APPLY "..n.name.." "..n.loc)
@@ -351,7 +350,7 @@ function darkroomIRFunctions:sdfTotalInner( registeredInputRates )
       elseif n.kind=="concat" or n.kind=="concatArray2d" then
         if n.inputs[1]:outputStreams()==0 then
           -- for non-handshake values (i.e. no streams), we just count this as 1 output stream
-          
+
           local IR, allConverged, ratesMatch
           -- all input rates must match!
           for key,i in pairs(n.inputs) do
@@ -370,28 +369,28 @@ function darkroomIRFunctions:sdfTotalInner( registeredInputRates )
             end
           end
           res = {{IR},{allConverged and ratesMatch}}
-	  if DARKROOM_VERBOSE then print("CONCAT",n.name,"converged=",res[2][1],"RATE",res[1][1][1],res[1][1][2]) end
-	else
-	  res = {{},{}}
-	  for k,v in ipairs(args) do
-	    assert( SDFRate.isSDFRate( v[1] ) )
-	    table.insert(res[1], v[1][1])
-	    table.insert(res[2], v[2][1])
-	  end
-	  
-	  if DARKROOM_VERBOSE then
-	    print("CONCAT",n.name)
-	    for k,v in ipairs(res[2]) do
-	      print("        concat["..tostring(k).."] converged=",v,"RATE",res[1][k][1],res[1][k][2])
-	    end
-	  end
-	end
+      if DARKROOM_VERBOSE then print("CONCAT",n.name,"converged=",res[2][1],"RATE",res[1][1][1],res[1][1][2]) end
+    else
+      res = {{},{}}
+      for k,v in ipairs(args) do
+        assert( SDFRate.isSDFRate( v[1] ) )
+        table.insert(res[1], v[1][1])
+        table.insert(res[2], v[2][1])
+      end
+
+      if DARKROOM_VERBOSE then
+        print("CONCAT",n.name)
+        for k,v in ipairs(res[2]) do
+          print("        concat["..tostring(k).."] converged=",v,"RATE",res[1][k][1],res[1][k][2])
+        end
+      end
+    end
       elseif n.kind=="statements" then
         local allConverged = true
         for _,arg in pairs(args) do
-          for k,v in pairs(arg[2]) do 
-            assert(type(v)=="boolean"); 
-            allConverged=allConverged and v 
+          for k,v in pairs(arg[2]) do
+            assert(type(v)=="boolean");
+            allConverged=allConverged and v
           end
         end
         res = { args[1][1], { allConverged } }
@@ -419,7 +418,7 @@ function darkroomIRFunctions:sdfTotalInner( registeredInputRates )
     assert(type(v)=="boolean")
     if v==false then return false end
   end
-  
+
   return true
 end
 
@@ -477,8 +476,8 @@ function darkroomIRFunctions:sdfExtremeRate( highest )
       function( n, args )
         local r = n:calcSdfRate(self)
         assert( SDFRate.isFrac(r) or r==nil )
-        
-        local res 
+
+        local res
 
         if __sdfExtremeRateCache[self][highest]==nil and r~=nil then
           __sdfExtremeRateCache[self][highest] = {r,n.loc}
@@ -564,7 +563,7 @@ function darkroomIRFunctions:typecheck()
         else
           err(false, "selectStream input must be array or tuple of handshakes, but is "..tostring(n.inputs[1].type) )
         end
-        
+
         --return darkroom.newIR(n)
       else
         print("Rigel Typecheck NYI ",n.kind)
@@ -584,7 +583,7 @@ function darkroomIRFunctions:codegenSystolic( module )
       elseif n.kind=="applyMethod" then
         assert( n.inst.fn.registered )
         local I = module:lookupInstance(n.inst.name)
-        if n.fnname=="load" then 
+        if n.fnname=="load" then
           module:lookupFunction("reset"):addPipeline( I:load_reset(nil,module:lookupFunction("reset"):getValid()) )
           return {I:load(S.tuple{S.null(),S.constant(true,types.bool())})}
         elseif n.fnname=="store" then
@@ -597,7 +596,7 @@ function darkroomIRFunctions:codegenSystolic( module )
         err( n.fn.systolicModule~=nil, "Error, missing systolic module for "..n.fn.kind)
         err( n.fn.systolicModule:lookupFunction("process"):getInput().type==darkroom.lower(n.fn.inputType), "Systolic type doesn't match fn type, fn '"..n.fn.kind.."', is "..tostring(n.fn.systolicModule:lookupFunction("process"):getInput().type).." but should be "..tostring(darkroom.lower(n.fn.inputType)) )
         err( n.fn.systolicModule.functions.process.output.type:constSubtypeOf(darkroom.lower(n.fn.outputType)), "Systolic output type doesn't match fn type, fn '"..n.fn.kind.."', is "..tostring(n.fn.systolicModule.functions.process.output.type).." but should be "..tostring(darkroom.lower(n.fn.outputType)) )
-        
+
         err(type(n.fn.stateful)=="boolean", "Missing stateful annotation "..n.fn.kind)
 
         local I = module:add( n.fn.systolicModule:instantiate(n.name,nil,nil,nil) )
@@ -611,7 +610,7 @@ function darkroomIRFunctions:codegenSystolic( module )
         elseif n.fn.stateful then
           module:lookupFunction("reset"):addPipeline( I:reset() )
         end
-        
+
         if n.fn.inputType==types.null() then
           return { I:process() }
         elseif darkroom.isV(n.inputs[1].type) then
@@ -664,7 +663,7 @@ function darkroom.input( ty, sdfRate )
   end
 
   err( darkroom.streamCount(ty)==0 or darkroom.streamCount(ty)==#sdfRate, "rigel.input: number of streams in type "..tostring(ty).." ("..tostring(darkroom.streamCount(ty))..") != number of SDF streams passed in ("..tostring(#sdfRate)..")" )
-  
+
   return darkroom.newIR( {kind="input", type = ty, name="input", id={}, inputs={}, sdfRate=sdfRate, loc=getloc()} )
 end
 
@@ -691,7 +690,7 @@ function darkroom.apply( name, fn, input, sdfRateOverride )
   err( darkroom.isFunction(fn), "second argument to apply must be a darkroom function" )
   err( input==nil or darkroom.isIR( input ), "last argument to apply must be darkroom value or nil" )
   err( sdfRateOverride==nil or SDFRate.isSDFRate(sdfRateOverride), "sdfRateOverride must be SDF rate" )
-  
+
   return darkroom.newIR( {kind = "apply", name = name, loc=getloc(), fn = fn, inputs = {input}, sdfRateOverride=sdfRateOverride } )
 end
 

@@ -126,11 +126,11 @@ function RS.modules.map(t)
 end
 
 function RS.modules.sum(t)
-  return C.sum(t.inType, t.inType, t.outType)
+  return C.sum(t.inType, t.inType, t.outType, t.async)
 end
 
 function RS.modules.sub(t)
-  return C.sub(t.inType, t.inType, t.outType)
+  return C.sub(t.inType, t.inType, t.outType, t.async)
 end
 
 function RS.modules.rcp(t)
@@ -173,13 +173,16 @@ local fixedLift = J.memoize(function(A)
   return out:toRigelModule("fixedLiftRS_"..tostring(A):gsub('%W','_'))
                    end)
 
+function RS.modules.cast(t)
+   return C.cast(t.inType, t.outType)
+end
 
 function RS.modules.sqrt(t)
   return C.compose("RSSQRT",fixedSqrt(t.outputType),fixedLift(t.inputType))
 end
 
 local sumPow2 = function(A,B,outputType)
-  local partial = RM.lift( "RSsumpow2", types.tuple {A,B}, outputType, 0, 
+  local partial = RM.lift( "RSsumpow2", types.tuple {A,B}, outputType, 0,
     function(sinp)
       local sout = S.cast(S.index(sinp,0),outputType)+(S.cast(S.index(sinp,1),outputType)*S.cast(S.index(sinp,1),outputType))
       sout = sout:disablePipelining()
@@ -208,7 +211,7 @@ function RS.modules.constSeq(t)
 end
 
 function RS.modules.filterSeq(t)
-  
+
   local rate
   if SDFRate.isFrac(t.rate) then
     rate=t.rate
@@ -218,7 +221,7 @@ function RS.modules.filterSeq(t)
   else
     err("rigelSimple filterSeq rate is invalid format")
   end
-  
+
   return RM.filterSeq( t.type, t.size[1], t.size[2], rate, t.fifoSize, t.coerce )
 end
 
@@ -228,14 +231,14 @@ end
 
 function RS.connect(t)
   err( R.isFunction(t.toModule), "RigelSimple.connect: toModule must be rigel module")
-  
+
   local inp = t.input
 
   if t.input~=nil then
     if R.isHandshake(t.input.type) and R.isHandshake(t.toModule.inputType) then
       local btype = R.extractData(t.input.type)
       local itype = R.extractData(t.toModule.inputType)
-      
+
       if btype==types.array2d(itype,1) then
         ccnt = ccnt + 1
         inp = R.apply( t.name or "v"..tostring(ccnt), RS.HS(C.index(btype,0)), inp )
@@ -284,7 +287,7 @@ end
 
 function RS.index(t)
   local ty=t.input.type
-  
+
   if R.isHandshake(ty) then
     ty = R.extractData(ty)
     ccnt = ccnt + 1
@@ -303,7 +306,7 @@ function RS.fanOut(t)
   ty = R.extractData(ty)
   ccnt = ccnt + 1
   local out = R.apply("v"..tostring(ccnt),RM.broadcastStream(ty,t.branches), t.input )
-  
+
   local res = {}
   for i=1,t.branches do
     ccnt = ccnt + 1
@@ -321,7 +324,7 @@ function RS.fanIn(t)
 
     table.insert(typelist,ty)
   end
-  
+
   ccnt = ccnt + 1
   ccnt = ccnt + 1
   return R.apply("v"..tostring(ccnt-1), RM.packTuple(typelist), R.concat("v"..tostring(ccnt),t) )
@@ -342,9 +345,9 @@ function RS.defineModule(t)
   return RM.lambda(t.name or "v"..tostring(ccnt), t.input, out, fifoList )
 end
 
-function RS.HS(t) 
+function RS.HS(t)
   if types.isType(t) then
-    return R.Handshake(t) 
+    return R.Handshake(t)
   elseif R.isFunction(t) then
     --print("LIFT",t.name,t.kind,t.inputType,t.outputType)
     if R.isV(t.inputType) and R.isRV(t.outputType) then
@@ -385,7 +388,7 @@ function RS.modules.fwriteSeq(t)
     local out, fwritetype
 
     local fwritetype = t.type:toCPUType()
-    
+
     out = RS.connect{input=inp,toModule=C.cast(t.type,fwritetype)}
     out = RS.connect{input=out,toModule=RM.fwriteSeq(t.filename,fwritetype,t.filenameVerilog)}
     out = RS.connect{input=out,toModule=C.cast(fwritetype,t.type)}
@@ -397,7 +400,7 @@ end
 
 function RS.writePixels(input,id,imageSize,V)
   err(V==nil or V==1, "rigelSimple writePixels NYI: non unit vector widths "..tostring(V))
-  
+
   --local IT = input:typecheck()
   --print("WRITEPX",IT.type)
 
@@ -412,13 +415,13 @@ function RS.writePixels(input,id,imageSize,V)
 --  if TY:isArray() then
 --    TYY = TY:arrayOver()
 --  end
-    
+
   local mod = RS.modules.fwriteSeq{type=TY, filename="out/dbg_terra_"..id..".raw", filenameVerilog="out/dbg_verilog_"..id..".raw"}
 
 --  if TY:isArray() then
 --    mod = C.linearPipeline{C.index(TY,0),mod,C.arrayop(TYY,1)}
 --  end
-  
+
   if R.isHandshake(input.type) then
      mod = RS.HS(mod)
   end
@@ -428,7 +431,7 @@ function RS.writePixels(input,id,imageSize,V)
   file:write("return {width="..tostring(imageSize[1])..",height="..tostring(imageSize[2])..",type='"..tostring(TY).."'}")
   file:close()
   --
-  
+
   return RS.connect{input=input, toModule=mod}
 end
 

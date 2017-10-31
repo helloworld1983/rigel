@@ -14,7 +14,7 @@ local modules = {}
 modules.sumwrap = memoize(function( ty, limit, X)
   err( types.isType(ty), "sumwrap: type must be rigel type" )
   err( ty:isNumber(), "sumwrap: type must be numeric rigel type, but is "..tostring(ty))
-  
+
   assert(type(limit)=="number")
   assert(X==nil)
 
@@ -33,7 +33,7 @@ modules.incIf=memoize(function(inc,ty,hasCE)
   assert(type(hasCE)=="boolean")
 
   local swinp = S.parameter("process_input", types.tuple{ty,types.bool()})
-  
+
   local ot = S.select( S.index(swinp,1), S.index(swinp,0)+S.constant(inc,ty), S.index(swinp,0) ):disablePipelining()
   local CE = S.CE("CE")
   if hasCE==false then CE=nil end
@@ -44,7 +44,7 @@ end)
 modules.incIfNowrap=memoize(function(inc,ty)
   if inc==nil then inc=1 end
   if ty==nil then ty=types.uint(16) end
-  
+
   local max
   if ty:isUint() then
     max = math.pow(2,ty.precision)-1
@@ -52,7 +52,7 @@ modules.incIfNowrap=memoize(function(inc,ty)
     assert(false)
   end
   local swinp = S.parameter("process_input", types.tuple{ty,types.bool()})
-  
+
   local ot = S.select( S.__and(S.index(swinp,1),S.lt(S.index(swinp,0),S.constant(max,ty))), S.index(swinp,0)+S.constant(inc,ty), S.index(swinp,0) ):disablePipelining()
   return S.module.new( "incifnowrap_"..inc..tostring(ty), {process=S.lambda("process",swinp,ot,"process_output",nil,nil,S.CE("CE"))},{})
 end)
@@ -67,7 +67,7 @@ modules.incIfWrap=memoize(function( ty, limit, inc )
   err(limit<math.pow(2,ty:verilogBits()), "incIfWrap: limit out of bounds of type!")
   local incv = inc or 1
   local swinp = S.parameter("process_input", types.tuple{ty, types.bool()})
-  
+
   local nextValue = S.select( S.eq(S.index(swinp,0), S.constant(limit,ty)), S.constant(0,ty), S.index(swinp,0)+S.constant(incv,ty) )
   local ot = S.select( S.index(swinp,1), nextValue, S.index(swinp,0) ):disablePipelining()
   return S.module.new( J.sanitize("incif_wrap"..tostring(ty).."_"..limit.."_inc"..tostring(inc)), {process=S.lambda("process",swinp,ot,"process_output",nil,nil,S.CE("CE"))},{})
@@ -98,7 +98,7 @@ function modules.modSub( A, B, wrap )
   assert( systolic.isAST(B))
   assert(A.type==B.type)
   assert(type(wrap)=="number")
-  
+
   return S.select(S.lt(A,B), S.constant(wrap, A.type)-B+A, A-B )
 end
 
@@ -117,7 +117,7 @@ modules.ram128 = function(ty, init)
   assert(types.isType(ty))
   local ram128 = Ssugar.moduleConstructor( J.sanitize("ram128_"..tostring(ty)) )
   local bits = ty:verilogBits()
-  
+
   assert(type(init)=="table")
   local slicedInit = {}
   for b=1,bits do
@@ -215,8 +215,8 @@ modules.fifo = memoize(function(ty,items,verbose)
   local popFrontAssert = fifo:add( systolic.module.assert( "attempting to pop from an empty fifo", true ):instantiate("popFrontAssert") )
   popFront:addPipeline( popFrontAssert:process( hasData ) )
   local popFrontPrint
-  if verbose then 
-    popFrontPrint= fifo:add( systolic.module.print( types.tuple{types.uint(addrBits),types.uint(addrBits),types.uint(addrBits),types.bool()},"FIFO readaddr %d writeaddr %d size %d ready %d", true):instantiate("popFrontPrintInst") ) 
+  if verbose then
+    popFrontPrint= fifo:add( systolic.module.print( types.tuple{types.uint(addrBits),types.uint(addrBits),types.uint(addrBits),types.bool()},"FIFO readaddr %d writeaddr %d size %d ready %d", true):instantiate("popFrontPrintInst") )
     popFront:addPipeline( popFrontPrint:process( S.tuple{readAddr:get(), writeAddr:get(), fsize, readyReg:get()} ) )
   end
   popFront:addPipeline( readAddr:setBy( S.constant(true, types.bool() ) ) )
@@ -235,7 +235,7 @@ modules.fifo = memoize(function(ty,items,verbose)
   local peekFront = fifo:addFunction( Ssugar.lambdaConstructor("peekFront") )
   peekFront:setOutput( popOutput, "peekFront" )
   peekFront:setCE(popCE)
-  
+
   -- popFrontReset
   local popFrontReset = fifo:addFunction( Ssugar.lambdaConstructor("popFrontReset" ) )
   popFrontReset:addPipeline( readAddr:reset() )
@@ -408,7 +408,7 @@ end
 --
 -- This does a few clever optimizations:
 -- * if all exprs are const, it does no reads.
--- * If one of the exprs happens to have a value that is 
+-- * If one of the exprs happens to have a value that is
 --   already in the shift register, it will just read that value instead
 --   of calculating it. This happens if exprs[a] == exprs[b](#exprs), using the delay syntax
 function modules.addShifter( module, exprs, stride, period, verbose, X )
@@ -497,10 +497,10 @@ function fixedBram(conf)
       assert( #conf.init == 2048 )
       for block=0,63 do
         local S = {}
-        for i=0,31 do 
+        for i=0,31 do
           local value = conf.init[block*32+i+1]
           assert( value < 256 )
-          table.insert(S,1,string.format("%02x",value)) 
+          table.insert(S,1,string.format("%02x",value))
         end
 --        initS = initS..".INIT_"..string.format("%02X",block).."(256'h"..table.concat(S,"").."),\n"
         table.insert(configParams, ".INIT_"..string.format("%02X",block).."(256'h"..table.concat(S,"")..")")
@@ -550,7 +550,7 @@ modules.bramSDP = memoize(function( writeAndReturnOriginal, sizeInBytes, inputBy
   err( type(CE)=="boolean", "CE must be boolean")
 
   err( math.floor(inputBytes)==inputBytes, "bramSDP: inputBytes not integral "..tostring(inputBytes))
-  
+
   --err( isPowerOf2(inputBytes), "inputBytes is not power of 2")
   local writeAddrs = sizeInBytes/inputBytes
   err( J.isPowerOf2(writeAddrs), "writeAddress count isn't a power of 2 (size="..sizeInBytes..",inputBytes="..inputBytes..",writeAddrs="..writeAddrs..")")
@@ -560,7 +560,7 @@ modules.bramSDP = memoize(function( writeAndReturnOriginal, sizeInBytes, inputBy
     local readAddrs = sizeInBytes/outputBytes
     err( J.isPowerOf2(readAddrs), "readAddress count isn't a power of 2")
   end
-  
+
   -- the idea here is that we want to pack the data into the smallest # of brams possible.
   -- we are limited by (a) the number of addressable items, and (b) the bw of each bram.
   -- if we have more than 2048 addressable items, we can't pack into brams (would need additional multiplexers)
@@ -629,17 +629,17 @@ modules.bramSDP = memoize(function( writeAndReturnOriginal, sizeInBytes, inputBy
       local internalInputAddrBits = math.log(2048/eachInputBytes)/math.log(2)
       table.insert( out, m:writeAndReturnOriginal( systolic.tuple{ systolic.cast(inpAddr,types.uint(internalInputAddrBits)),inp} ) )
 
-      if outputBytes~=nil then 
+      if outputBytes~=nil then
         local internalOutputAddrBits = math.log(2048/eachOutputBytes)/math.log(2)
-        table.insert( outRead, m:read( systolic.cast(sinpRead,types.uint(internalOutputAddrBits)) ) ) 
+        table.insert( outRead, m:read( systolic.cast(sinpRead,types.uint(internalOutputAddrBits)) ) )
       end
     end
 
     local res = systolic.cast(systolic.tuple(out),types.bits(inputBytes*8))
     mod:addFunction( systolic.lambda("writeAndReturnOriginal", sinp, res, "WARO_OUT", nil, nil, J.sel(CE,S.CE("writeAndReturnOriginal_CE"),nil)) )
 
-    if outputBytes~=nil then 
-      mod:addFunction( systolic.lambda("read", sinpRead, systolic.cast(systolic.tuple(outRead),types.bits(outputBytes*8)), "READ_OUT", nil, nil, J.sel(CE,S.CE("read_CE"),nil) ) ) 
+    if outputBytes~=nil then
+      mod:addFunction( systolic.lambda("read", sinpRead, systolic.cast(systolic.tuple(outRead),types.bits(outputBytes*8)), "READ_OUT", nil, nil, J.sel(CE,S.CE("read_CE"),nil) ) )
     end
 
     return mod
@@ -687,7 +687,7 @@ modules.binop = memoize(function(op,lhsType,rhsType,outType)
   assert(types.isType(lhsType))
   assert(types.isType(rhsType))
   assert(types.isType(outType))
-  
+
   local str = op.."_"..tostring(lhsType).."_"..tostring(rhsType).."_"..tostring(outType)
   return loadVerilogFile( types.tuple{lhsType,rhsType}, outType, str)
 end)
@@ -733,7 +733,7 @@ module div(CLK,ce,inp,out);
   end
 endmodule
 ]]
-  
+
   local m = systolic.module.new("div",fns,{},true,nil,nil,vstring,{process=2})
   return m
 end
@@ -745,7 +745,7 @@ function modules.div(ty)
   err(ty:isUint(),"div: argument should be uint")
 
   local tyDouble = types.uint(ty.precision*2)
-  
+
   local divMod = SS.moduleConstructor("div")
 
   local process = divMod:addFunction(SS.lambdaConstructor( "process", types.tuple{ty,ty}, "inp" ))
@@ -755,7 +755,7 @@ function modules.div(ty)
   Qinp.name="Qinp"
   local divisor = S.index(inp,1)
   divisor.name="divisor"
-  
+
   local QR = S.cast(Qinp,tyDouble)
   QR.name="QRinp"
 
@@ -775,7 +775,7 @@ function modules.div(ty)
     local newQR = S.cast( S.tuple{S.cast(newQ,types.bits(ty.precision)),S.cast(newR,types.bits(ty.precision))}, types.bits(ty.precision*2))
     newQR = S.cast(newQR, tyDouble)
     newQR.name="newQR"..tostring(i)
-    
+
     QR = S.select( S.ge(R,divisor), newQR, QR)
     QR.name="QRout"..tostring(i)
   end
