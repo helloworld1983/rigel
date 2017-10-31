@@ -308,7 +308,11 @@ function harnessTop(t)
   err(type(t.inFile)=="string", "expected input filename to be string")
   err(type(t.outFile)=="string", "expected output filename to be string")
 
-  if(arg[1]=="axi") then
+  local backend = t.backend
+  if backend==nil then backend = arg[1] end
+  if backend==nil then backend = "verilog" end
+
+  if(backend=="axi") then
     t.fn = axiRateWrapper(t.fn, t.tapType)
   end
 
@@ -340,10 +344,6 @@ function harnessTop(t)
 
     err( SDFRate.fracEq(expectedOutputCountFrac,outputCountFrac), "Error, SDF predicted output tokens ("..tostring(SDFRate.fracToNumber(expectedOutputCountFrac))..") does not match stated output tokens ("..tostring(SDFRate.fracToNumber(outputCountFrac))..")")
   end
-
-  local backend = t.backend
-  if backend==nil then backend = arg[1] end
-  if backend==nil then backend = "verilog" end
 
   if backend=="verilog" or backend=="verilator" then
     H.verilogOnly( t.outFile, fn, t.inFile, t.tapType, t.tapValue, iover, inputP, t.inSize[1], t.inSize[2], oover, outputP, t.outSize[1], t.outSize[2], t.simCycles, t.harness )
