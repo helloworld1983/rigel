@@ -15,7 +15,16 @@ end
 
 function CT.cast(A,B)
   err(types.isType(B), "examples common cast, B must be type")
-  
+
+  -- cast A[1] -> A
+  if A.kind == 'array' and A.size[1]*A.size[2] == 1 then
+    if B.kind == 'array' and B.size[1]*B.size[2] ~= 1 then
+      return terra( a : &A:toTerraType(), out : &B:toTerraType() )
+               @out = (@a)[0]
+             end
+    end
+  end
+
   return terra( a : &A:toTerraType(), out : &B:toTerraType() )
                             @out = [B:toTerraType()](@a)
                   end
@@ -74,7 +83,7 @@ function CT.border(res,A,W,H,L,R,B,T,value)
   local struct Border {}
 
   terra Border:process( inp : &res.inputType:toTerraType(), out : &res.outputType:toTerraType() )
-    for y=0,H do for x=0,W do 
+    for y=0,H do for x=0,W do
         if x<L or y<B or x>=W-R or y>=H-T then
           (@out)[y*W+x] = [value]
         else
@@ -90,7 +99,7 @@ function CT.scale( res, A, w, h, scaleX, scaleY )
   local struct ScaleModule {}
 
   terra ScaleModule:process( inp : &res.inputType:toTerraType(), out : &res.outputType:toTerraType() )
-    for y=0,[h*scaleY] do 
+    for y=0,[h*scaleY] do
       for x=0,[w*scaleX] do
         var idx = [int](cmath.floor([float](x)/[float](scaleX)))
         var idy = [int](cmath.floor([float](y)/[float](scaleY)))
@@ -108,7 +117,7 @@ function CT.broadcast(A,W,H,OT)
     for y=0,H do
       for x=0,W do (@out)[y*W+x] = @inp end
     end
-	end
+  end
 end
 
 function CT.stencil( res, A, w, h, xmin, xmax, ymin, ymax )
@@ -159,10 +168,10 @@ function CT.sliceTup(inputType,OT,idxLow)
 end
 
 function CT.sliceArr(inputType,OT,idxLow,idyLow,idxHigh,idyHigh,W)
-  return terra(inp:&rigel.lower(inputType):toTerraType(), out:&rigel.lower(OT):toTerraType()) 
+  return terra(inp:&rigel.lower(inputType):toTerraType(), out:&rigel.lower(OT):toTerraType())
       for iy = idyLow,idyHigh+1 do
         for ix = idxLow, idxHigh+1 do
-          (@out)[(iy-idyLow)*(idxHigh-idxLow+1)+(ix-idxLow)] = (@inp)[ix+iy*W] 
+          (@out)[(iy-idyLow)*(idxHigh-idxLow+1)+(ix-idxLow)] = (@inp)[ix+iy*W]
         end
       end
     end
@@ -190,8 +199,8 @@ function CT.plusConsttfn(ty,value)
     q = quote @[out] = @[out] and (([ty:toTerraType()](1)<<[ty:verilogBits()])-1) end
   end
 
-  return terra( a : ty:toTerraType(true), [out] ) 
-    @[out] =  @a+[ty:toTerraType()](value) 
+  return terra( a : ty:toTerraType(true), [out] )
+    @[out] =  @a+[ty:toTerraType()](value)
     [q]
   end
 end

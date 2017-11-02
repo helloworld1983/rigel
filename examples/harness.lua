@@ -6,6 +6,7 @@ local types = require("types")
 local SDFRate = require "sdfrate"
 local J = require "common"
 local err = J.err
+local memoize = require "memoize"
 
 local function writeMetadata(filename, tab)
   err(type(filename)=="string")
@@ -195,7 +196,7 @@ local function axiRateWrapper(fn, tapType)
   oover = R.extractData(fn.outputType)
 
   if iover:verilogBits()==64 and oover:verilogBits()==64 then
-return fn
+    return fn
   end
 
   local inputP
@@ -225,9 +226,14 @@ return fn
     out = R.apply("harnessCR", RM.liftHandshake(RM.changeRate(iover, 1, targetInputP, inputP )), inp)
   end
 
-  if R.extractData(fn.inputType):isArray()==false then out = R.apply("harnessPW",RM.makeHandshake(C.index(types.array2d(iover,1),0)),out) end
+  if R.extractData(fn.inputType):isArray()==false then
+    out = R.apply("harnessPW",RM.makeHandshake(C.index(types.array2d(iover,1),0)),out)
+  end
+
   out = R.apply("HarnessHSFN",fn,out) --{input=out, toModule=fn}
-  if R.extractData(fn.outputType):isArray()==false then out = R.apply("harnessPW0",RM.makeHandshake(C.arrayop(oover,1)),out) end
+  if R.extractData(fn.outputType):isArray()==false then
+    out = R.apply("harnessPW0",RM.makeHandshake(C.arrayop(oover,1)),out)
+  end
 
   local targetOutputP = (64/oover:verilogBits())
   err( targetOutputP==math.floor(targetOutputP), "axiRateWrapper error: output type does not divide evenly into axi bus size")
@@ -236,13 +242,14 @@ return fn
     out = R.apply("harnessCREnd", RM.liftHandshake(RM.changeRate(oover,1,outputP,targetOutputP)),out)
   end
 
-  local outFn =  RM.lambda("hsfnAxiRateWrapper",inp,out)
+  local outFn = RM.lambda("hsfnAxiRateWrapper",inp,out)
 
   err( R.extractData(outFn.inputType):verilogBits()==64, "axi rate wrapper: failed to make input type 64 bit (originally "..tostring(fn.inputType)..")")
   err( R.extractData(outFn.outputType):verilogBits()==64, "axi rate wrapper: failed to make output type 64 bit")
 
   return outFn
 end
+axiRateWrapper = memoize(axiRateWrapper)
 
 -- AXI must have T=8
 function H.axi(filename, hsfn, inputFilename, tapType, tapValue, inputType, inputT, inputW, inputH, outputType, outputT, outputW, outputH,underflowTest,earlyOverride,X)
