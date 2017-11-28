@@ -273,11 +273,20 @@ function RS.selectStream(t)
   return R.selectStream( "v"..tostring(ccnt), t.input, t.index )
 end
 
+function RS.buffer(t)
+  local buf = C.identity(t.type)
+  buf.generator = 'buffer'
+  buf.depth = t.depth
+  print(require 'inspect'(buf, {depth = 2}))
+  return buf
+end
+
 function RS.fifoLoop(t)
   local ty = t.input.type
   assert( R.isHandshake(ty))
   ty = R.extractData(ty)
 
+  t.fifoList = t.fifoList or {}
   t.fifoList.fifos = t.fifoList.fifos or {}
   t.fifoList.statements = t.fifoList.statements or {}
 
