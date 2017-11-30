@@ -125,7 +125,7 @@ modules.packTuple = memoize(function( typelist, X )
   local res = {kind="packTuple"}
   
   J.map(typelist, function(t) rigel.expectBasic(t) end )
-  res.inputType = types.tuple( J.map(typelist, function(t) return rigel.Handshake(t) end) )
+  res.inputType = rigel.HandshakeTuple(typelist)
   res.outputType = rigel.Handshake( types.tuple(typelist) )
   res.stateful = false
   res.sdfOutput = {{1,1}}
@@ -837,9 +837,9 @@ modules.readMemory = memoize(function(ty)
 
   local addrType = types.uint(32)
   -- idx 0: address, idx 1: data
-  res.inputType = types.tuple{ rigel.Handshake(addrType), rigel.Handshake(ty) }
+  res.inputType = rigel.HandshakeTuple{addrType,ty}
   -- idx 0: output data, idx 1: addr to ram
-  res.outputType = types.tuple{ rigel.Handshake(ty), rigel.Handshake(addrType) }
+  res.outputType = rigel.HandshakeTuple{ty,addrType}
   res.stateful = true
   res.sdfOutput={ {1,1}, 'x' }
   res.sdfInput={ {1,1},'x'}
@@ -1266,26 +1266,26 @@ modules.pyramidSchedule = memoize(function( depth, wtop, T )
 end)
 
 -- WARNING: validOut depends on readyDownstream
-modules.toHandshakeArray = memoize(function( A, inputRates )
+modules.toHandshakeArrayOneHot = memoize(function( A, inputRates )
   err( types.isType(A), "A must be type" )
   rigel.expectBasic(A)
   err( type(inputRates)=="table", "inputRates must be table")
   assert( SDFRate.isSDFRate(inputRates))
 
-  local res = {kind="toHandshakeArray", A=A, inputRates = inputRates}
-  res.inputType = types.array2d( rigel.Handshake(A), #inputRates )
-  res.outputType = rigel.HandshakeArray( A, #inputRates )
+  local res = {kind="toHandshakeArrayOneHot", A=A, inputRates = inputRates}
+  res.inputType = rigel.HandshakeArray(A, #inputRates)
+  res.outputType = rigel.HandshakeArrayOneHot( A, #inputRates )
   res.sdfInput = inputRates
   res.sdfOutput = inputRates
   res.stateful = false
-  res.name = sanitize("ToHandshakeArray_"..tostring(A).."_"..#inputRates)
+  res.name = sanitize("ToHandshakeArrayOneHot_"..tostring(A).."_"..#inputRates)
 
   function res:sdfTransfer( I, loc ) 
-    err(#I[1]==#inputRates, "toHandshakeArray: incorrect number of input streams. Is "..(#I[1]).." but expected "..(#inputRates) )
+    err(#I[1]==#inputRates, "toHandshakeArrayOneHot: incorrect number of input streams. Is "..(#I[1]).." but expected "..(#inputRates) )
     return I 
   end
   
-  if terralib~=nil then res.terraModule = MT.toHandshakeArray( res,A, inputRates ) end
+  if terralib~=nil then res.terraModule = MT.toHandshakeArrayOneHot( res,A, inputRates ) end
 
   function res.makeSystolic()
     local systolicModule = Ssugar.moduleConstructor(res.name):onlyWire(true)
@@ -1343,7 +1343,7 @@ modules.serialize = memoize(function( A, inputRates, Schedule, X )
   assert(X==nil)
 
   local res = {kind="serialize", A=A, inputRates=inputRates, schedule=Schedule}
-  res.inputType = rigel.HandshakeArray( A, #inputRates )
+  res.inputType = rigel.HandshakeArrayOneHot( A, #inputRates )
   res.outputType = rigel.HandshakeTmuxed( A, #inputRates )
   err( type(Schedule.stateful)=="boolean", "Schedule missing stateful annotation")
   res.stateful = Schedule.stateful
@@ -1415,7 +1415,7 @@ modules.demux = memoize(function( A, rates, X )
   local res = {kind="demux", A=A, rates=rates}
 
   res.inputType = rigel.HandshakeTmuxed( A, #rates )
-  res.outputType = types.array2d(rigel.Handshake(A), #rates)
+  res.outputType = rigel.HandshakeArray(A, #rates)
   res.stateful = false
   res.name = sanitize("Demux_"..tostring(A).."_"..#rates)
 
@@ -1537,7 +1537,7 @@ modules.broadcastStream = memoize(function(A,N,X)
   err( type(N)=="number", "N must be number")
   assert(X==nil)
 
-  local res = {kind="broadcastStream", A=A, N=N, inputType = rigel.Handshake(A), outputType = types.array2d( rigel.Handshake(A), N), stateful=false}
+  local res = {kind="broadcastStream", A=A, N=N, inputType = rigel.Handshake(A), outputType = rigel.HandshakeArray(A, N), stateful=false}
 
   res.sdfInput = {{1,1}}
   res.sdfOutput = J.broadcast({1,1},N)
@@ -2880,7 +2880,7 @@ end
 
 -- function definition
 -- output, inputs
-function modules.lambda( name, input, output, instances, generatorStr, X )
+function modules.lambda( name, input, output, instances, generatorStr, generatorParams, X )
   if DARKROOM_VERBOSE then print("lambda start '"..name.."'") end
 
   err( X==nil, "lambda: too many arguments" )
@@ -2891,12 +2891,13 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
   err( instances==nil or type(instances)=="table", "lambda: instances must be nil or a table")
   if instances~=nil then J.map( instances, function(n) err( rigel.isInstance(n), "lambda: instances argument must be an array of instances" ) end ) end
   err( generatorStr==nil or type(generatorStr)=="string","lambda: generatorStr must be nil or string")
+  err( generatorParams==nil or type(generatorParams)=="table","lambda: generatorParams must be nil or table")
 
   if rigel.SDF then input, output = lambdaSDFNormalize(input,output) end
 
   name = J.verilogSanitize(name)
 
-  local res = {kind = "lambda", name=name, input = input, output = output, instances=instances, generator=generatorStr }
+  local res = {kind = "lambda", name=name, input = input, output = output, instances=instances, generator=generatorStr, params=generatorParams }
 
   if input==nil then
     res.inputType = types.null()
@@ -2993,9 +2994,7 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
   end
 
   local function makeSystolic( fn )
-    local onlyWire = rigel.isHandshake(fn.inputType) or rigel.isHandshake(fn.outputType)
-    if fn.inputType:isTuple() and rigel.isHandshake(fn.inputType.list[1]) then onlyWire = true end
-    if fn.inputType:isArray() and rigel.isHandshake(fn.inputType:arrayOver()) then onlyWire = true end
+    local onlyWire = rigel.isHandshake(fn.inputType) or rigel.isHandshake(fn.outputType) or rigel.isHandshakeTuple(fn.inputType) or rigel.isHandshakeArray(fn.inputType)
     
     local module = Ssugar.moduleConstructor( fn.name ):onlyWire(onlyWire)
 
@@ -3051,6 +3050,14 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
 
           local input
 
+          -- why do we need to support multiple readers of a HS stream? (ie ANDing the ready bits?)
+          -- A stream may be read by multi selectStreams, which is OK.
+          -- However: why can't we just special-case expect all multiple readers to be selectStreams? It seems like this should work.
+          -- Note 1: Take a look at modulesTerra.lambda... it basically implements this that way
+          -- Note 2: one issue is that it's very important that this function returns a systolic value of the correct type for
+          --         every intermediate! We can return/examine any intermediate, and it must have the right type!
+          --         don't try to special case by having this function return intermediates as lua arrays of bools or something.
+         
           for k,i in pairs(args) do
             local parentKey = i[2]
             local value = i[1]
@@ -3065,10 +3072,10 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
               else
                 input = S.__and(input,thisi)
               end
-            elseif n:outputStreams()>1 or (n.type:isArray() and rigel.isHandshake(n.type:arrayOver())) then
+            elseif n:outputStreams()>1 or darkroom.isHandshakeArray(n.type) then
               assert(systolicAST.isSystolicAST(thisi))
 
-              if rigel.isHandshakeTmuxed(n.type) or rigel.isHandshakeArray(n.type) then
+              if rigel.isHandshakeTmuxed(n.type) or rigel.isHandshakeArrayOneHot(n.type) then
                 assert(J.keycount(args)==1) -- NYI
                 input = thisi
               else
@@ -3181,12 +3188,12 @@ function modules.lambda( name, input, output, instances, generatorStr, X )
             if rigel.isHandshake(i.type) then
               err(systolicAST.isSystolicAST(res[k]), "incorrect output format "..n.kind.." input "..tostring(k)..", not systolic value" )
               err(systolicAST.isSystolicAST(res[k]) and res[k].type:isBool(), "incorrect output format "..n.kind.." input "..tostring(k).." (type "..tostring(i.type)..", name "..i.name..") is "..tostring(res[k].type).." but expected bool, "..n.loc )
-            elseif i:outputStreams()>1 or (i.type:isArray() and rigel.isHandshake(i.type:arrayOver())) then
+            elseif i:outputStreams()>1 or rigel.isHandshakeArray(i.type) then
 
               err(systolicAST.isSystolicAST(res[k]), "incorrect output format "..n.kind.." input "..tostring(k)..", not systolic value" )
               if(rigel.isHandshakeTmuxed(i.type)) then
                 err( res[k].type:isBool(),  "incorrect output format "..n.kind.." input "..tostring(k).." is "..tostring(res[k].type).." but expected stream count "..tostring(i:outputStreams()).."  - "..n.loc)
-              elseif rigel.isHandshakeArray(i.type) then
+              elseif rigel.isHandshakeArrayOneHot(i.type) then
                 err( res[k].type==types.uint(8),  "incorrect output format "..n.kind.." input "..tostring(k).." is "..tostring(res[k].type).." but expected stream count "..tostring(i:outputStreams()).."  - "..n.loc)
               else
                 err(res[k].type:isArray() and res[k].type:arrayOver():isBool(),  "incorrect output format "..n.kind.." input "..tostring(k).." is "..tostring(res[k].type).." but expected stream count "..tostring(i:outputStreams()).."  - "..n.loc)
@@ -3296,7 +3303,7 @@ function modules.lift( name, inputType, outputType, delay, makeSystolic, makeTer
   return res
 end
 
-modules.constSeq = memoize(function( value, A, w, h, T, X )
+modules.constSeqInner = memoize(function( value, A, w, h, T, X )
   err( type(value)=="table", "constSeq: value should be a lua array of values to shift through")
   err( J.keycount(value)==#value, "constSeq: value should be a lua array of values to shift through")
   err( #value==w*h, "constSeq: value array has wrong number of values")
@@ -3318,7 +3325,13 @@ modules.constSeq = memoize(function( value, A, w, h, T, X )
   res.stateful = false
   --if T==1 then res.stateful=false end
   res.sdfInput, res.sdfOutput = {}, {{1,1}}  -- well, technically this produces 1 output for every (nil) input
-  res.name = "constSeq_"..verilogSanitize(tostring(value)).."_T"..tostring(1/T).."_w"..tostring(w).."_h"..tostring(h)
+
+  -- TODO: FIX: replace this with an actual hash function... it seems likely this can lead to collisions
+  local vh = J.to_string(value)
+  if #vh>100 then vh = string.sub(vh,0,100) end
+  
+  -- some different types can have the same lua array representation (i.e. different array shapes), so we need to include both
+  res.name = verilogSanitize("constSeq_"..tostring(A).."_"..vh.."_T"..tostring(1/T).."_w"..tostring(w).."_h"..tostring(h))
   res.delay = 0
 
   if terralib~=nil then res.terraModule = MT.constSeq(res, value, A, w, h, T,W ) end
@@ -3353,6 +3366,13 @@ modules.constSeq = memoize(function( value, A, w, h, T, X )
 
   return rigel.newFunction( res )
 end)
+
+function modules.constSeq(value,A,w,h,T,X)
+  err( type(value)=="table", "constSeq: value should be a lua array of values to shift through")
+  local UV = J.uniq(value)
+  local I = modules.constSeqInner(UV,A,w,h,T,X)
+  return I
+end
 
 modules.freadSeq = memoize(function( filename, ty )
   err( type(filename)=="string", "filename must be a string")
