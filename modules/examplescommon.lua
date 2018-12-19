@@ -1707,6 +1707,41 @@ C.handshakeToHandshakeFramed = memoize(
     return rigel.newFunction(res)
   end)
 
+C.stripFramed = memoize(
+  function( A, X)
+    err(A:is("HandshakeFramed") or A:is("HandshakeArrayFramed"),"StripFramed: input should be framed, but is: "..tostring(A) )
+    assert(X==nil)
+
+    
+    local res = {inputType=A,sdfInput=SDF{1,1},sdfOutput=SDF{1,1},stateful=false}
+
+    if A:is("HandshakeFramed") then
+      res.outputType = types.Handshake(A.params.A)
+    elseif A:is("HandshakeArrayFramed") then
+      res.outputType = types.HandshakeArray(A.params.A,A.params.W,A.params.H)
+    else
+      assert(false)
+    end
+    
+    res.name=J.sanitize("StripFramed_"..tostring(A))
+    
+    function res.makeSystolic()
+      local sm = Ssugar.moduleConstructor(res.name):onlyWire(true)
+      local r = S.parameter("ready_downstream",types.bool())
+      sm:addFunction( S.lambda("ready", r, r, "ready") )
+      local I = S.parameter("process_input", R.lower(A) )
+      sm:addFunction( S.lambda("process",I,I,"process_output") )
+
+      return sm
+    end
+    function res.makeTerra()
+      return CT.stripFramed(res,A)
+    end
+    
+    return rigel.newFunction(res)
+
+  end)
+
 -- if ser==true, takes A[W,H]->A[W*H/ratio,W,H}
 -- if ser==false, takes A[W*H/ratio,W,H}->A[W,H]
 C.changeRateFramed = memoize(function(A, W, H, ratio, ser, X)

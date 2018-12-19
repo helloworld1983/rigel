@@ -861,6 +861,8 @@ function darkroomIRFunctions:typecheck()
     
     if darkroom.isHandshake(n.inputs[1].type) then
       n.type = darkroom.HandshakeArray( darkroom.extractData(n.inputs[1].type), n.W, n.H )
+    elseif n.inputs[1].type:is("HandshakeFramed") then
+      n.type = types.HandshakeArrayFramed( darkroom.extractData(n.inputs[1].type), n.inputs[1].type.params.mixed, n.inputs[1].type.params.dims, n.W, n.H )
     elseif darkroom.isBasic(n.inputs[1].type) then
       n.type = types.array2d( n.inputs[1].type, n.W, n.H )
     else

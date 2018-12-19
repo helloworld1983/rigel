@@ -970,7 +970,7 @@ modules.mapFramed = memoize(function( fn, w, h, mixed, outputW, outputH, outputM
     local SDFTok = (inTok*n)/d
     
     if outTok~=SDFTok then
-      print("mapFramed: error, number of input and output tokens not equal based on specified params! inTok:"..tostring(inTok).." outTok:"..tostring(outTok).." SDFTok:"..tostring(SDFTok).." inputW:"..tostring(w).." inputH:"..tostring(h).." outputW:"..tostring(outputW).." outputH:"..tostring(outputH))
+      print("mapFramed: warning, number of input and output tokens not equal based on specified params! inTok:"..tostring(inTok).." outTok:"..tostring(outTok).." SDFTok:"..tostring(SDFTok).." inputW:"..tostring(w).." inputH:"..tostring(h).." outputW:"..tostring(outputW).." outputH:"..tostring(outputH))
     end
   end
   
@@ -1768,13 +1768,16 @@ modules.arbitrate = memoize(function(A,inputRates,tmuxed,X)
   rigel.expectBasic(A)
   if tmuxed==nil then tmuxed=false end
   assert(type(tmuxed)=="boolean")
-  assert(X==nil)
+  err(X==nil,"arbitrate: too many arguments")
 
+  assert( framedV==nil or type(framedV)=="number")
+  
   local res = {kind="arbitrate", A=A, inputRates=inputRates}
   res.name = sanitize("Arbitrate_"..tostring(A).."_"..#inputRates)
   res.stateful = false
-  
-  res.inputType = rigel.HandshakeArray( A, #inputRates )
+
+  res.inputType = types.HandshakeArray( A, #inputRates )
+
   if tmuxed then
     res.outputType = rigel.HandshakeTmuxed( A, #inputRates )
   else
