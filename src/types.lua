@@ -796,10 +796,21 @@ function types.isBasic(A)
   return true
 end
 
-function types.Handshake(A)
+-- by default, this is ready-valid (RV), ie, ready_downstream has to be asserted before valid
+-- if VR==true, this is instead valid-ready (VR), which allows valid to be asserted _before_ ready_downstream (optionally)
+function types.Handshake(A,VR,X)
   err(types.isType(A),"Handshake: argument should be type")
   err(types.isBasic(A),"Handshake: argument should be basic type, but is: "..tostring(A))
-  return types.named("Handshake("..tostring(A)..")", types.tuple{A,types.bool()}, "Handshake", {A=A} )
+  err(X==nil,"Handshake: too many arguments")
+  if VR==nil then VR=false end
+  local name = "Handshake("..tostring(A)..")"
+  if VR then name = "HandshakeVR("..tostring(A)..")" end
+  return types.named(name, types.tuple{A,types.bool()}, "Handshake", {A=A,VR=VR} )
+end
+
+function types.HandshakeVR(A,X)
+  err(X==nil,"HandshakeVR: too many arguments")
+  return types.Handshake(A,true)
 end
 
 function types.HandshakeVarlen(A)

@@ -67,7 +67,8 @@ darkroom.isStreaming = types.isStreaming
 darkroom.isBasic = types.isBasic
 
 rigelGlobalFunctions = {}
-rigelGlobalMT = {__index=rigelGlobalFunctions}
+rigelGlobalMT = {__index=rigelGlobalFunctions,
+                 __tostring = function(tab) return "Global "..tab.direction.." "..tab.name.." : "..tostring(tab.type) end}
 
 -- direction is the direction of this signal on the top module:
 -- 'output' means this is an output of the top module. 'input' means its an input to the top module.
@@ -317,7 +318,7 @@ __index=function(tab,key)
     --if sm.sideChannels~=nil then B=J.keycount(sm.sideChannels) end
     --err(A==B,"makeSystolic: side channels doesn't match globals")
     for k,_ in pairs(tab.globals) do
-      err( sm.sideChannels[k.systolicValue]~=nil, "makeSystolic: systolic module lacks side channel for global "..k.name )
+      err( sm.sideChannels[k.systolicValue]~=nil, "makeSystolic: systolic module '"..sm.name.."' lacks side channel for global "..k.name )
       err( k.systolicValueReady==nil or sm.sideChannels[k.systolicValueReady]~=nil, "makeSystolic: systolic module '"..sm.name.."' lacks side channel for global ready "..k.name )
     end
 
@@ -359,7 +360,7 @@ __call=function(tab,...)
   local rawarg = {...}
 
   for _,arg in pairs(rawarg) do
-    J.err( arg==nil or darkroom.isIR(arg),"applying a module to something other than a rigel value?")
+    J.err( arg==nil or darkroom.isIR(arg),"applying a module to something other than a rigel value? Is '"..tostring(arg).."'")
 
     -- discover variable name from lua
     if arg~=nil and arg.defaultName then
@@ -890,7 +891,8 @@ function darkroomIRFunctions:typecheck()
       err(false, "selectStream input must be array or tuple of handshakes, but is "..tostring(n.inputs[1].type) )
     end
   elseif n.kind=="readGlobal" then
-    err( n.global.direction=="input", "Error, attempted to read a global output ("..n.global.name..")" )
+    -- this is actually ok: we may be making an internal connection here
+    --err( n.global.direction=="input", "Error, attempted to read a global output ("..n.global.name..")" )
   elseif n.kind=="writeGlobal" then
     err( n.global.direction=="output", "Error, attempted to write a global input ("..n.global.name..")" )
     err( n.inputs[1].type==n.global.type, "Error, input to writeGlobal is incorrect type. is "..tostring(n.inputs[1].type).." but should be "..tostring(n.global.type)..", "..n.loc )
